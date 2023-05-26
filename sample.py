@@ -1,6 +1,6 @@
 import re
 
-from flask import Flask
+from flask import Flask, render_template_string
 
 
 app = Flask(__name__, static_folder='.', static_url_path='')
@@ -70,7 +70,8 @@ def php_to_html(php_code):
 
 @app.route('/')
 def index():
-    return php_to_html(open('index.html', 'r').read())
+    html_output = php_to_html(open('index.html', 'r').read())
+    return render_template_string(html_output)
 
 
 if __name__ == '__main__':
