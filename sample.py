@@ -1,114 +1,77 @@
-from dataclasses import dataclass, field, asdict
-from datetime import datetime
-from typing import Dict
+import re
 
-from flask import Flask, request, make_response
+from flask import Flask
 
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
 
-class InvalidArgument(Exception):
-    pass
+def php_to_html(php_code):
+    # Regex patterns for PHP statements
+    var_string_pattern = r'<\?php\s+\$(\w+)\s+=\s+"(.*?)";\s+\?>'
+    var_number_pattern = r'<\?php\s+\$(\w+)\s+=\s+(\d+);\s+\?>'
+    array_pattern = r'<\?php\s+\$(\w+)\s+=\s+array\((.*?)\);\s+\?>'
+    echo_var_pattern = r'<\?php\s+echo\s+\$(\w+);\s+\?>'
+    foreach_pattern = r'<\?php\s+foreach\(\$(\w+)\s+as\s+\$(\w+)\)\s+\{\s+echo\s+\$\w+;\s+\}\s+\?>'
+    if_else_pattern = r'<\?php\s+if\(\$(\w+)\s+==\s+"(.*?)"\)\s+\{\s+echo\s+"(.*?)";\s+\}\s+else\s+\{\s+echo\s+"(.*?)";\s+\}\s+\?>'
+    function_pattern = r'<\?php\s+function\s+(\w+)\(\)\s+\{\s+echo\s+"(.*?)";\s+\}\s+\?>'
+    function_call_pattern = r'<\?php\s+(\w+)\(\);\s+\?>'
 
+    # Store variables and functions in a dict
+    vars = {}
+    funcs = {}
 
-class UnexpectedArgument(Exception):
-    pass
+    # Handle string variables
+    for var_name, value in re.findall(var_string_pattern, php_code):
+        vars[var_name] = value
+        php_code = php_code.replace(f'<?php ${var_name} = "{value}"; ?>', '')
 
+    # Handle number variables
+    for var_name, value in re.findall(var_number_pattern, php_code):
+        vars[var_name] = int(value)
+        php_code = php_code.replace(f'<?php ${var_name} = {value}; ?>', '')
 
-def get_incrementer():
-    count = 0
-    
-    def inner():
-        nonlocal count
-        count += 1
-        return count
-    
-    return inner
+    # Handle arrays
+    for var_name, values in re.findall(array_pattern, php_code):
+        vars[var_name] = [v.strip(' "') for v in values.split(',')]
+        php_code = php_code.replace(f'<?php ${var_name} = array({values}); ?>', '')
 
+    # Handle variable echo statements
+    for var_name in re.findall(echo_var_pattern, php_code):
+        if var_name in vars:
+            php_code = php_code.replace(f'<?php echo ${var_name}; ?>', f'<p>{vars[var_name]}</p>')
 
-@dataclass(frozen=True)
-class Todo:
-    id: str
-    content: str
-    deadline: datetime
-    is_finished: bool = field(default=False)
-    created_at: datetime = field(default_factory=datetime.now)
-    updated_at: datetime = field(default_factory=datetime.now)
-    
-    def finish(self):
-        self.is_finished = True
-        self.updated_at = datetime.now()
+    # Handle foreach statements
+    for array_name, _ in re.findall(foreach_pattern, php_code):
+        if array_name in vars and isinstance(vars[array_name], list):
+            foreach_html = ''.join([f'<p>{value}</p>' for value in vars[array_name]])
+            php_code = php_code.replace(f'<?php foreach(${array_name} as $value) {{ echo $value; }} ?>', foreach_html)
 
-    def to_dict(self):
-        return asdict(self)
+    # Handle if-else statements
+    for var_name, compare_value, if_value, else_value in re.findall(if_else_pattern, php_code):
+        if var_name in vars:
+            if vars[var_name] == compare_value:
+                php_code = php_code.replace(f'<?php if(${var_name} == "{compare_value}") {{ echo "{if_value}"; }} else {{ echo "{else_value}"; }} ?>', f'<p>{if_value}</p>')
+            else:
+                php_code = php_code.replace(f'<?php if(${var_name} == "{compare_value}") {{ echo "{if_value}"; }} else {{ echo "{else_value}"; }} ?>', f'<p>{else_value}</p>')
 
-    @classmethod
-    def from_dict(cls, **kwargs):
-        if 'content' not in kwargs:
-            raise InvalidArgument('field content is required')
-        content = kwargs['content']
-        if not isinstance(content, str):
-            raise TypeError('field content should be string')
-        
-        if 'deadline' not in kwargs:
-            raise InvalidArgument('field deadline is required')
-        s_deadline = kwargs['deadline']
-        if not isinstance(s_deadline, str):
-            raise TypeError('field deadline should be string-compatible')
-        deadline = datetime.strptime(s_deadline, '%Y-%m-%d')
-        
-        if len(kwargs) != 2:
-            raise UnexpectedArgument('fields must include only content & deadline')
-        return cls(
-            incrementer(),
-            content,
-            deadline,
-            )
+    # Handle function definitions
+    for func_name, echo_value in re.findall(function_pattern, php_code):
+        funcs[func_name] = echo_value
+        php_code = php_code.replace(f'<?php function {func_name}() {{ echo "{echo_value}"; }} ?>', '')
 
+    # Handle function calls
+    for func_name in re.findall(function_call_pattern, php_code):
+        if func_name in funcs:
+            php_code = php_code.replace(f'<?php {func_name}(); ?>', f'<p>{funcs[func_name]}</p>')
 
-data: Dict[int, Todo] = {}
-incrementer = get_incrementer()
+    return php_code
 
 
 @app.route('/')
 def index():
-    return app.send_static_file('index.html')
+    return php_to_html(open('index.html', 'r').read())
 
 
-@app.route('/api/1.0/todos', methods=['GET', 'POST'])
-def todos():
-    if request.method == 'GET':
-        items = []
-        for _, d in sorted(data.items(), key=lambda x: x[0]):
-            if d.is_finished:
-                continue
-            items.append(d.to_dict())
-        
-        res = {
-            'items': items,
-            'total': len(data),
-        }
-        return make_response(res, 200)
-    if request.method == 'POST':
-        try:
-            d = Todo.from_dict(**request.get_json())
-        except Exception as e:
-            return make_response(str(e), 500)
-        data[d.id] = d
-        return make_response(d.to_dict(), 200)
-    return make_response('Method Not Allowed', 405)
-
-
-@app.route('/api/1.0/todos/<todo_id>')
-def todo(todo_id: str):
-    if not todo_id.isdigit():
-        return make_response('Invalid Argument: id should be integer compatible', 500)
-    if int(todo_id) not in data:
-        return make_response('Not Found', 404)
-    if request.method == 'GET':
-        return make_response(data[int(todo_id)].to_dict(), 200)
-    return make_response('Method Not Allowed', 405)
-
-
-app.run(port=8080, debug=True)
+if __name__ == '__main__':
+    app.run(port=8080, debug=True)

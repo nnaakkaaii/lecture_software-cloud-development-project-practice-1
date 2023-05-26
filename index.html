@@ -2,86 +2,12 @@
     <title> TODO Application </title>
 </head>
 <body>
-    <form id="todo-form">
-        <input type="text" id="content" placefolder="Task" required>
-        <input type="date" id="deadline" required>
-        <button type="submit">Add TODO</button>
-    </form>
-    <table id="todos-table">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <td>Task</td>
-                <td>Deadline</td>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
-    
-    <form id="get-todo-form">
-        <input type="number" id="todo-id" placeholder="TODO ID" required>
-        <button type="submit">GET TODO</button>
-    </form>
-    
-    <div id="todo-detail"></div>
-    
-    <script>
-        const todoForm = document.getElementById('todo-form');
-        const todosTable = document.getElementById('todos-table');
-        const getTodoForm = document.getElementById('get-todo-form');
-        const todoDetail = document.getElementById('todo-detail');
-        
-        todoForm.onsubmit = async function(e) {
-          e.preventDefault();
-          const content = document.getElementById('content').value;
-          const deadline = document.getElementById('deadline').value;
-          const response = await fetch('/api/1.0/todos', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({content: content, deadline: deadline})
-          });
-          if (response.ok) {
-            listTodos();
-          } else {
-            const data = await response.json();
-            alert(`Error: ${data.message}`);
-          }
-        };
-        
-        async function listTodos() {
-          const response = await fetch('/api/1.0/todos');
-          if (response.ok) {
-            const data = await response.json();
-            const tbody = todosTable.getElementsByTagName('tbody')[0];
-            tbody.innerHTML = '';
-            for (let item of data.items) {
-              const row = tbody.insertRow();
-              const cell1 = row.insertCell(0);
-              const cell2 = row.insertCell(1);
-              const cell3 = row.insertCell(2);
-              cell1.innerHTML = item.id;
-              cell2.innerHTML = item.content;
-              cell3.innerHTML = item.deadline;
-            }
-          } else {
-            const data = await response.json();
-            alert(`Error: ${data.message}`);
-          }
-        }
-        
-        getTodoForm.onsubmit = async function(e) {
-          e.preventDefault();
-          const id = document.getElementById('todo-id').value;
-          const response = await fetch(`/api/1.0/todos/${id}`);
-          if (response.ok) {
-            const data = await response.json();
-            todoDetail.innerHTML = `Task: ${data.content}, Deadline: ${data.deadline}`;
-          } else {
-            const data = await response.json();
-            alert(`Error: ${data.message}`);
-          }
-        };
-        
-        listTodos()
-    </script>
+    <h1>Welcome to My Home Page</h1>
+    <?php $greeting = "Hello World!"; ?>
+    <?php echo $greeting; ?>
+    <?php $array = array("apple", "banana", "cherry"); ?>
+    <?php foreach($array as $value) { echo $value; } ?>
+    <?php if($greeting == "Hello World!") { echo "Greeting is correct."; } else { echo "Greeting is incorrect."; } ?>
+    <?php function greet() { echo "Hello from function!"; } ?>
+    <?php greet(); ?>
 </body>
